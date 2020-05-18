@@ -47,6 +47,7 @@ int main(int argc, const char *argv[])
     vector<double> keypointMeans;
     vector<double> keypointVariances;
     vector<int> keypointMatches;
+    vector<double> keypointTimings;
 
     /* MAIN LOOP OVER ALL IMAGES */
 
@@ -82,8 +83,13 @@ int main(int argc, const char *argv[])
         //// EOF STUDENT ASSIGNMENT
         cout << "#1 : LOAD IMAGE INTO BUFFER done" << endl;
 
+
         /* DETECT IMAGE KEYPOINTS */
 
+        // double t = (double)cv::getTickCount();
+        cv::TickMeter tm;
+        tm.start();
+    
         // extract 2D keypoints from current image
         vector<cv::KeyPoint> keypoints; // create empty feature list for current image
         string detectorType = "SIFT";
@@ -206,6 +212,13 @@ int main(int argc, const char *argv[])
         // push descriptors for current frame to end of data buffer
         (dataBuffer.end() - 1)->descriptors = descriptors;
 
+        // timing
+        // t = ((double)cv::getTickCount() - t) / cv::getTickFrequency();
+        tm.stop();
+        double t = tm.getTimeMilli();
+        keypointTimings.push_back(t);
+        std::cout << "imgIndex: " << imgIndex << " keypoint detection and descriptor extraction in " << t << " ms." << endl;
+            
         cout << "#3 : EXTRACT DESCRIPTORS done" << endl;
 
         if (dataBuffer.size() > 1) // wait until at least two images have been processed
@@ -259,6 +272,7 @@ int main(int argc, const char *argv[])
             bVis = false;
         }
 
+
     } // eof loop over all images
 
 
@@ -278,10 +292,18 @@ int main(int argc, const char *argv[])
         cout << n <<" | ";
     cout << endl;
 
-
     cout << "matches " << argv[1] <<"-"<< argv[2]<<"| 0 | ";
     for (auto n: keypointMatches)
         cout << n << " | ";
+    cout << endl;
+
+    cout << "timings " << argv[1] <<"-"<< argv[2]<<" | ";
+    double sum = 0.0;
+    for (auto n: keypointTimings) {
+        sum += n;
+        cout << n << " | ";
+    }
+    cout << sum/keypointTimings.size() << " | ";
     cout << endl;
 
     return 0;
