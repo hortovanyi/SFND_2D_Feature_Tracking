@@ -13,12 +13,16 @@ void matchDescriptors(std::vector<cv::KeyPoint> &kPtsSource, std::vector<cv::Key
 
     if (matcherType.compare("MAT_BF") == 0)
     {
-        int normType = cv::NORM_HAMMING;
+        int normType = cv::NORM_HAMMING; // used for ORB, BRISK and BRIEF 
+        if (descriptorType.compare("SIFT") == 0){
+            normType = cv::NORM_L2;
+        }        
+
         matcher = cv::BFMatcher::create(normType, crossCheck);
     }
     else if (matcherType.compare("MAT_FLANN") == 0)
     {
-        // ...
+        matcher = cv::FlannBasedMatcher::create();
     }
 
     // perform matching task
@@ -30,7 +34,19 @@ void matchDescriptors(std::vector<cv::KeyPoint> &kPtsSource, std::vector<cv::Key
     else if (selectorType.compare("SEL_KNN") == 0)
     { // k nearest neighbors (k=2)
 
-        // ...
+        int k = 2;
+        std::vector<std::vector<cv::DMatch>> knn_matches;
+        matcher->knnMatch(descSource, descRef, knn_matches, k);
+        
+        //-- Filter matches using the Lowe's ratio test
+        const float ratio_thresh = 0.8f;
+        for (size_t i = 0; i < knn_matches.size(); i++)
+        {
+            if (knn_matches[i][0].distance < ratio_thresh * knn_matches[i][1].distance)
+            {
+                matches.push_back(knn_matches[i][0]);
+            }
+        }
     }
 }
 
@@ -47,13 +63,57 @@ void descKeypoints(vector<cv::KeyPoint> &keypoints, cv::Mat &img, cv::Mat &descr
         float patternScale = 1.0f; // apply this scale to the pattern used for sampling the neighbourhood of a keypoint.
 
         extractor = cv::BRISK::create(threshold, octaves, patternScale);
-    }
-    else
+    } 
+    else if (descriptorType.compare("BRIEF") == 0)
     {
-
-        //...
+        extractor = cv::xfeatures2d::BriefDescriptorExtractor::create();
     }
+    else if (descriptorType.compare("ORB") == 0)
+    {
+        int 	nfeatures = 500;
+        float 	scaleFactor = 1.2f;
+        int 	nlevels = 8;
+        int 	edgeThreshold = 31;
+        int 	firstLevel = 0;
+        int 	WTA_K = 2;
+        // cv::ORB::ScoreType 	scoreType = cv::ORB::HARRIS_SCORE;
+        cv::ORB::ScoreType 	scoreType = cv::ORB::FAST_SCORE;
+        int 	patchSize = 31;
+        int 	fastThreshold = 20;
 
+        extractor = cv::ORB::create(nfeatures, scaleFactor, nlevels, edgeThreshold, firstLevel, WTA_K, scoreType, patchSize, fastThreshold);
+    }
+    else if (descriptorType.compare("FREAK") == 0)
+    {
+        bool 	orientationNormalized = true;
+        bool 	scaleNormalized = true;
+        float 	patternScale = 22.0f;
+        int 	nOctaves = 4;
+        extractor = cv::xfeatures2d::FREAK::create(orientationNormalized, scaleNormalized, patternScale,nOctaves);
+    }
+    else if (descriptorType.compare("AKAZE") == 0)
+    {
+        cv::AKAZE::DescriptorType 	descriptor_type = cv::AKAZE::DESCRIPTOR_MLDB;
+        int 	descriptor_size = 0;
+        int 	descriptor_channels = 3;
+        float 	threshold = 0.001f;
+        int 	nOctaves = 4;
+        int 	nOctaveLayers = 4;
+        cv::KAZE::DiffusivityType 	diffusivity = cv::KAZE::DIFF_PM_G2; 
+
+        extractor = cv::AKAZE::create(descriptor_type, descriptor_size, descriptor_channels, threshold, nOctaves, nOctaveLayers, diffusivity);
+    }
+    else if (descriptorType.compare("SIFT") == 0)
+    {
+        int 	nfeatures = 0;
+        int 	nOctaveLayers = 3;
+        double 	contrastThreshold = 0.04;
+        double 	edgeThreshold = 10;
+        double 	sigma = 1.6;
+
+        extractor = cv::SIFT::create(nfeatures, nOctaveLayers, contrastThreshold,edgeThreshold, sigma);
+
+    }
     // perform feature description
     double t = (double)cv::getTickCount();
     extractor->compute(img, keypoints, descriptors);
@@ -314,7 +374,7 @@ void detKeypointsSIFT(vector<cv::KeyPoint> &keypoints, cv::Mat &img, bool bVis)
         cv::Mat visImage = img.clone();
         cv::drawKeypoints(img, keypoints, visImage, cv::Scalar::all(-1), cv::DrawMatchesFlags::DRAW_RICH_KEYPOINTS);
         string windowName = "SIFT Corner Detector Results";
-        cv::namedWindow(windowName, 6);
+        cv::namedWindow(windowName, cv::WINDOW_AUTOSIZE);
         imshow(windowName, visImage);
         cv::waitKey(0);
     }

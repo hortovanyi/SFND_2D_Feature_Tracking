@@ -13,6 +13,7 @@
 #include <opencv2/features2d.hpp>
 #include <opencv2/xfeatures2d.hpp>
 #include <opencv2/xfeatures2d/nonfree.hpp>
+#include <numeric>
 
 #include "dataStructures.h"
 #include "matching2D.hpp"
@@ -38,8 +39,14 @@ int main(int argc, const char *argv[])
 
     // misc
     int dataBufferSize = 2;       // no. of images which are held in memory (ring buffer) at the same time
-    deque<DataFrame> dataBuffer; // list of data frames which are held in memory at the same time
+    std::deque<DataFrame> dataBuffer; // list of data frames which are held in memory at the same time
     bool bVis = false;            // visualize results
+
+    // per image values
+    vector<double> keypointSizes;
+    vector<double> keypointMeans;
+    vector<double> keypointVariances;
+    vector<int> keypointMatches;
 
     /* MAIN LOOP OVER ALL IMAGES */
 
@@ -80,6 +87,8 @@ int main(int argc, const char *argv[])
         // extract 2D keypoints from current image
         vector<cv::KeyPoint> keypoints; // create empty feature list for current image
         string detectorType = "SIFT";
+        if (argc ==3)
+            detectorType = argv[1];
         // string detectorType = "AKAZE";
         // string detectorType = "ORB";
         // string detectorType = "BRISK";
@@ -87,9 +96,6 @@ int main(int argc, const char *argv[])
         // string detectorType = "HARRIS";
         // string detectorType = "SHITOMASI";
 
-        //// STUDENT ASSIGNMENT
-        //// TASK MP.2 -> add the following keypoint detectors in file matching2D.cpp and enable string-based selection based on detectorType
-        //// -> HARRIS, FAST, BRISK, ORB, AKAZE, SIFT
 
         if (detectorType.compare("SHITOMASI") == 0)
         {
@@ -101,28 +107,24 @@ int main(int argc, const char *argv[])
         }
         else if(detectorType.compare("FAST") == 0)
         {
-            detKeypointsFAST(keypoints, imgGray, true);
+            detKeypointsFAST(keypoints, imgGray, false);
         }
         else if(detectorType.compare("BRISK") == 0)
         {
-            detKeypointsBRISK(keypoints, imgGray, true);
+            detKeypointsBRISK(keypoints, imgGray, false);
         }
         else if(detectorType.compare("ORB") == 0)
         {
-            detKeypointsORB(keypoints, imgGray, true);
+            detKeypointsORB(keypoints, imgGray, false);
         }
         else if(detectorType.compare("AKAZE") == 0)
         {
-            detKeypointsAKAZE(keypoints, imgGray, true);
+            detKeypointsAKAZE(keypoints, imgGray, false);
         }
         else if(detectorType.compare("SIFT") == 0)
         {
-            detKeypointsSIFT(keypoints, imgGray, true);
+            detKeypointsSIFT(keypoints, imgGray, false);
         }
-        //// EOF STUDENT ASSIGNMENT
-
-        //// STUDENT ASSIGNMENT
-        //// TASK MP.3 -> only keep keypoints on the preceding vehicle
 
         // only keep keypoints on the preceding vehicle
         bool bFocusOnVehicle = true;
@@ -135,12 +137,39 @@ int main(int argc, const char *argv[])
                     vehicleKeyPoints.push_back(kp);
 
             keypoints = vehicleKeyPoints;
+            
+            keypointSizes.push_back(keypoints.size());
+            
+            // calculate mean of the keypoint sizes
+            double sizeTotal = 0.0;
+            for (auto kp : keypoints) {
+                sizeTotal += kp.size;
+            }
+            
+            double mean = sizeTotal/keypoints.size();
+            keypointMeans.push_back(mean);
+
+            // calculate variance of the keypoint sizes
+            auto add_square = [mean] (double sum, double i) 
+            {
+                auto d = i - mean;
+                return sum + d*d;
+            };
+            double varianceTotal = 0.0;
+            for (auto kp: keypoints)
+                varianceTotal = add_square(varianceTotal, kp.size);
+            double variance = varianceTotal /keypoints.size();
+            keypointVariances.push_back(variance);
+
+            cout << detectorType << " imgIndex: " << imgIndex << " vehicle keypoints: " << keypoints.size(); 
+            cout << " mean: " << mean << " variance: " << variance << endl;
+
+
         }
 
-        //// EOF STUDENT ASSIGNMENT
 
         // optional : limit number of keypoints (helpful for debugging and learning)
-        bool bLimitKpts = true;
+        bool bLimitKpts = false;
         if (bLimitKpts)
         {
             int maxKeypoints = 50;
@@ -164,7 +193,13 @@ int main(int argc, const char *argv[])
         //// -> BRIEF, ORB, FREAK, AKAZE, SIFT
 
         cv::Mat descriptors;
-        string descriptorType = "BRISK"; // BRIEF, ORB, FREAK, AKAZE, SIFT
+        // string descriptorType = "BRISK"; // BRIEF, ORB, FREAK, AKAZE, SIFT
+        // string descriptorType = "ORB"; 
+        // string descriptorType = "FREAK"; 
+        // string descriptorType = "AKAZE"; 
+        string descriptorType = "SIFT"; 
+        if (argc == 3)
+            descriptorType = argv[2];
         descKeypoints((dataBuffer.end() - 1)->keypoints, (dataBuffer.end() - 1)->cameraImg, descriptors, descriptorType);
         //// EOF STUDENT ASSIGNMENT
 
@@ -180,12 +215,14 @@ int main(int argc, const char *argv[])
 
             vector<cv::DMatch> matches;
             string matcherType = "MAT_BF";        // MAT_BF, MAT_FLANN
-            string descriptorType = "DES_BINARY"; // DES_BINARY, DES_HOG
-            string selectorType = "SEL_NN";       // SEL_NN, SEL_KNN
+            // string matcherType = "MAT_FLANN";        // MAT_BF, MAT_FLANN
+            // string selectorType = "SEL_NN";       // SEL_NN, SEL_KNN
+            string selectorType = "SEL_KNN";       // SEL_NN, SEL_KNN
 
             //// STUDENT ASSIGNMENT
             //// TASK MP.5 -> add FLANN matching in file matching2D.cpp
             //// TASK MP.6 -> add KNN match selection and perform descriptor distance ratio filtering with t=0.8 in file matching2D.cpp
+
 
             matchDescriptors((dataBuffer.end() - 2)->keypoints, (dataBuffer.end() - 1)->keypoints,
                              (dataBuffer.end() - 2)->descriptors, (dataBuffer.end() - 1)->descriptors,
@@ -193,13 +230,16 @@ int main(int argc, const char *argv[])
 
             //// EOF STUDENT ASSIGNMENT
 
+            // store the number of matches
+            keypointMatches.push_back(matches.size());
+
             // store matches in current data frame
             (dataBuffer.end() - 1)->kptMatches = matches;
 
             cout << "#4 : MATCH KEYPOINT DESCRIPTORS done" << endl;
 
             // visualize matches between current and previous image
-            bVis = true;
+            bVis = false;
             if (bVis)
             {
                 cv::Mat matchImg = ((dataBuffer.end() - 1)->cameraImg).clone();
@@ -211,7 +251,7 @@ int main(int argc, const char *argv[])
 
                 string windowName = "Matching keypoints between two camera images";
                 // cv::namedWindow(windowName, 7);
-                cv::namedWindow(windowName, cv::WINDOW_OPENGL) ;
+                cv::namedWindow(windowName, cv::WINDOW_AUTOSIZE) ;
                 cv::imshow(windowName, matchImg);
                 cout << "Press key to continue to next image" << endl;
                 cv::waitKey(0); // wait for key to be pressed
@@ -220,6 +260,29 @@ int main(int argc, const char *argv[])
         }
 
     } // eof loop over all images
+
+
+    // render stats
+    cout << "size | " ;
+    for (auto s: keypointSizes)
+        cout << s <<" | ";
+    cout << endl;
+
+    cout << "mean | " ;
+    for (auto n: keypointMeans)
+        cout << n <<" | ";
+    cout << endl;
+
+    cout << "variance | " ;
+    for (auto n: keypointVariances)
+        cout << n <<" | ";
+    cout << endl;
+
+
+    cout << "matches " << argv[1] <<"-"<< argv[2]<<"| 0 | ";
+    for (auto n: keypointMatches)
+        cout << n << " | ";
+    cout << endl;
 
     return 0;
 }
